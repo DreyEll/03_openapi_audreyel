@@ -2,12 +2,11 @@ openapi: 3.0.3
 
 info:
   title: Music API
-  description: API untuk mengelola penyanyi, album, dan lagu.
+  description: API untuk mengelola penyanyi, album, dan lagu
   version: 1.0.0
 
 servers:
   - url: http://localhost:8080
-    description: Local server
 
 paths:
 
@@ -15,10 +14,9 @@ paths:
 
     get:
       summary: Mendapatkan semua penyanyi
-
       responses:
         '200':
-          description: Berhasil mendapatkan data penyanyi
+          description: Berhasil
 
     post:
       summary: Menambahkan penyanyi
@@ -29,31 +27,29 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PenyanyiInput'
+              type: object
+              required:
+                - nama
+              properties:
+                nama:
+                  type: string
+                  example: Coldplay
 
       responses:
         '201':
-          description: Penyanyi berhasil ditambahkan
+          description: Berhasil menambahkan penyanyi
 
   /penyanyi/{id}:
-
-    get:
-      summary: Mendapatkan penyanyi berdasarkan ID
-
-      parameters:
-        - $ref: '#/components/parameters/ID'
-
-      responses:
-        '200':
-          description: Berhasil
-        '404':
-          description: Penyanyi tidak ditemukan
 
     put:
       summary: Mengubah penyanyi
 
       parameters:
-        - $ref: '#/components/parameters/ID'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
 
       requestBody:
         required: true
@@ -61,27 +57,34 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PenyanyiInput'
+              type: object
+              properties:
+                nama:
+                  type: string
+                  example: Wave to Earth Baru
 
       responses:
         '200':
-          description: Penyanyi berhasil diubah
+          description: Berhasil mengubah penyanyi
 
     delete:
       summary: Menghapus penyanyi
 
       parameters:
-        - $ref: '#/components/parameters/ID'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
 
       responses:
         '200':
-          description: Penyanyi berhasil dihapus
+          description: Berhasil menghapus penyanyi
 
   /album:
 
     get:
       summary: Mendapatkan semua album
-
       responses:
         '200':
           description: Berhasil
@@ -95,29 +98,30 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AlbumInput'
+              type: object
+              properties:
+                nama_album:
+                  type: string
+                tahun:
+                  type: integer
+                penyanyi_id:
+                  type: integer
 
       responses:
         '201':
-          description: Album berhasil ditambahkan
+          description: Berhasil
 
   /album/{id}:
-
-    get:
-      summary: Mendapatkan album berdasarkan ID
-
-      parameters:
-        - $ref: '#/components/parameters/ID'
-
-      responses:
-        '200':
-          description: Berhasil
 
     put:
       summary: Mengubah album
 
       parameters:
-        - $ref: '#/components/parameters/ID'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
 
       requestBody:
         required: true
@@ -125,27 +129,37 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AlbumInput'
+              type: object
+              properties:
+                nama_album:
+                  type: string
+                tahun:
+                  type: integer
+                penyanyi_id:
+                  type: integer
 
       responses:
         '200':
-          description: Album berhasil diubah
+          description: Berhasil
 
     delete:
       summary: Menghapus album
 
       parameters:
-        - $ref: '#/components/parameters/ID'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
 
       responses:
         '200':
-          description: Album berhasil dihapus
+          description: Berhasil
 
   /lagu:
 
     get:
       summary: Mendapatkan semua lagu
-
       responses:
         '200':
           description: Berhasil
@@ -159,29 +173,28 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LaguInput'
+              type: object
+              properties:
+                judul:
+                  type: string
+                album_id:
+                  type: integer
 
       responses:
         '201':
-          description: Lagu berhasil ditambahkan
+          description: Berhasil
 
   /lagu/{id}:
-
-    get:
-      summary: Mendapatkan lagu berdasarkan ID
-
-      parameters:
-        - $ref: '#/components/parameters/ID'
-
-      responses:
-        '200':
-          description: Berhasil
 
     put:
       summary: Mengubah lagu
 
       parameters:
-        - $ref: '#/components/parameters/ID'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
 
       requestBody:
         required: true
@@ -189,84 +202,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LaguInput'
+              type: object
+              properties:
+                judul:
+                  type: string
+                album_id:
+                  type: integer
 
       responses:
         '200':
-          description: Lagu berhasil diubah
+          description: Berhasil
 
     delete:
       summary: Menghapus lagu
 
       parameters:
-        - $ref: '#/components/parameters/ID'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
 
       responses:
         '200':
-          description: Lagu berhasil dihapus
-
-components:
-
-  parameters:
-
-    ID:
-      name: id
-      in: path
-      required: true
-
-      schema:
-        type: integer
-        example: 1
-
-  schemas:
-
-    PenyanyiInput:
-      type: object
-
-      required:
-        - nama
-
-      properties:
-
-        nama:
-          type: string
-          example: Wave to Earth
-
-    AlbumInput:
-      type: object
-
-      required:
-        - nama_album
-        - tahun
-        - penyanyi_id
-
-      properties:
-
-        nama_album:
-          type: string
-          example: Parachutes
-
-        tahun:
-          type: integer
-          example: 2000
-
-        penyanyi_id:
-          type: integer
-          example: 2
-
-    LaguInput:
-      type: object
-
-      required:
-        - judul
-        - album_id
-
-      properties:
-
-        judul:
-          type: string
-          example: Yellow
-
-        album_id:
-          type: integer
-          example: 3
+          description: Berhasil
