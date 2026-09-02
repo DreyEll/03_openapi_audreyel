@@ -11,19 +11,16 @@ servers:
 paths:
 
   /penyanyi:
-
     get:
       summary: Mendapatkan semua penyanyi
       responses:
         '200':
-          description: Berhasil
+          description: Berhasil mendapatkan data
 
     post:
       summary: Menambahkan penyanyi
-
       requestBody:
         required: true
-
         content:
           application/json:
             schema:
@@ -33,99 +30,118 @@ paths:
               properties:
                 nama:
                   type: string
-                  example: Coldplay
-
+                  example: Wave to Earth
       responses:
         '201':
-          description: Berhasil menambahkan penyanyi
+          description: Penyanyi berhasil ditambahkan
 
   /penyanyi/{id}:
-
-    put:
-      summary: Mengubah penyanyi
-
+    get:
+      summary: Mendapatkan penyanyi berdasarkan ID
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+      responses:
+        '200':
+          description: Berhasil
+        '404':
+          description: Penyanyi tidak ditemukan
 
+    put:
+      summary: Mengubah penyanyi
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
       requestBody:
         required: true
-
         content:
           application/json:
             schema:
               type: object
+              required:
+                - nama
               properties:
                 nama:
                   type: string
-                  example: Wave to Earth Baru
-
+                  example: Wave to Earth Updated
       responses:
         '200':
-          description: Berhasil mengubah penyanyi
+          description: Penyanyi berhasil diubah
 
     delete:
       summary: Menghapus penyanyi
-
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       responses:
         '200':
-          description: Berhasil menghapus penyanyi
+          description: Penyanyi berhasil dihapus
 
   /album:
-
     get:
       summary: Mendapatkan semua album
       responses:
         '200':
-          description: Berhasil
+          description: Berhasil mendapatkan data
 
     post:
       summary: Menambahkan album
-
       requestBody:
         required: true
-
         content:
           application/json:
             schema:
               type: object
+              required:
+                - nama_album
+                - tahun
+                - penyanyi_id
               properties:
                 nama_album:
                   type: string
+                  example: Parachutes
                 tahun:
                   type: integer
+                  example: 2000
                 penyanyi_id:
                   type: integer
-
+                  example: 2
       responses:
         '201':
-          description: Berhasil
+          description: Album berhasil ditambahkan
 
   /album/{id}:
+    get:
+      summary: Mendapatkan album berdasarkan ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Berhasil
 
     put:
       summary: Mengubah album
-
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       requestBody:
         required: true
-
         content:
           application/json:
             schema:
@@ -133,72 +149,81 @@ paths:
               properties:
                 nama_album:
                   type: string
+                  example: Parachutes Updated
                 tahun:
                   type: integer
+                  example: 2001
                 penyanyi_id:
                   type: integer
-
+                  example: 2
       responses:
         '200':
-          description: Berhasil
+          description: Album berhasil diubah
 
     delete:
       summary: Menghapus album
-
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       responses:
         '200':
-          description: Berhasil
+          description: Album berhasil dihapus
 
   /lagu:
-
     get:
       summary: Mendapatkan semua lagu
       responses:
         '200':
-          description: Berhasil
+          description: Berhasil mendapatkan data
 
     post:
       summary: Menambahkan lagu
-
       requestBody:
         required: true
-
         content:
           application/json:
             schema:
               type: object
+              required:
+                - judul
+                - album_id
               properties:
                 judul:
                   type: string
+                  example: Yellow
                 album_id:
                   type: integer
-
+                  example: 3
       responses:
         '201':
-          description: Berhasil
+          description: Lagu berhasil ditambahkan
 
   /lagu/{id}:
+    get:
+      summary: Mendapatkan lagu berdasarkan ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Berhasil
 
     put:
       summary: Mengubah lagu
-
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       requestBody:
         required: true
-
         content:
           application/json:
             schema:
@@ -206,23 +231,22 @@ paths:
               properties:
                 judul:
                   type: string
+                  example: Yellow Updated
                 album_id:
                   type: integer
-
+                  example: 3
       responses:
         '200':
-          description: Berhasil
+          description: Lagu berhasil diubah
 
     delete:
       summary: Menghapus lagu
-
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       responses:
         '200':
-          description: Berhasil
+          description: Lagu berhasil dihapus
