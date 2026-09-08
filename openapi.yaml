@@ -2,251 +2,562 @@ openapi: 3.0.3
 
 info:
   title: Music API
-  description: API untuk mengelola penyanyi, album, dan lagu
+  description: API untuk mengelola data penyanyi, album, dan lagu
   version: 1.0.0
 
 servers:
   - url: http://localhost:8080
+    description: Local server
 
 paths:
 
+  # =========================
+  # PENYANYI
+  # =========================
+
   /penyanyi:
+
     get:
       summary: Mendapatkan semua penyanyi
+      tags:
+        - Penyanyi
+
       responses:
         '200':
-          description: Berhasil mendapatkan data
+          description: Berhasil mendapatkan data penyanyi
+
+          content:
+            application/json:
+              schema:
+                type: array
+
+                items:
+                  $ref: '#/components/schemas/Penyanyi'
 
     post:
       summary: Menambahkan penyanyi
+      tags:
+        - Penyanyi
+
       requestBody:
         required: true
+
         content:
           application/json:
             schema:
               type: object
+
               required:
                 - nama
+
               properties:
                 nama:
                   type: string
                   example: Wave to Earth
+
       responses:
         '201':
           description: Penyanyi berhasil ditambahkan
 
+        '400':
+          description: Format data tidak valid
+
   /penyanyi/{id}:
+
     get:
       summary: Mendapatkan penyanyi berdasarkan ID
+      tags:
+        - Penyanyi
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       responses:
+
         '200':
-          description: Berhasil
+          description: Berhasil mendapatkan penyanyi
+
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Penyanyi'
+
         '404':
           description: Penyanyi tidak ditemukan
 
     put:
       summary: Mengubah penyanyi
+      tags:
+        - Penyanyi
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       requestBody:
         required: true
+
         content:
           application/json:
+
             schema:
+
               type: object
+
               required:
                 - nama
+
               properties:
+
                 nama:
                   type: string
-                  example: Wave to Earth Updated
+                  example: Coldplay
+
       responses:
+
         '200':
           description: Penyanyi berhasil diubah
 
+        '404':
+          description: Penyanyi tidak ditemukan
+
     delete:
       summary: Menghapus penyanyi
+      tags:
+        - Penyanyi
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       responses:
+
         '200':
           description: Penyanyi berhasil dihapus
 
+        '404':
+          description: Penyanyi tidak ditemukan
+
+  # =========================
+  # ALBUM
+  # =========================
+
   /album:
+
     get:
       summary: Mendapatkan semua album
+      tags:
+        - Album
+
       responses:
+
         '200':
-          description: Berhasil mendapatkan data
+          description: Berhasil mendapatkan data album
+
+          content:
+            application/json:
+              schema:
+
+                type: array
+
+                items:
+                  $ref: '#/components/schemas/Album'
 
     post:
       summary: Menambahkan album
+      tags:
+        - Album
+
       requestBody:
         required: true
+
         content:
           application/json:
+
             schema:
+
               type: object
+
               required:
                 - nama_album
                 - tahun
                 - penyanyi_id
+
               properties:
+
                 nama_album:
                   type: string
                   example: Parachutes
+
                 tahun:
                   type: integer
                   example: 2000
+
                 penyanyi_id:
                   type: integer
                   example: 2
+
       responses:
+
         '201':
           description: Album berhasil ditambahkan
 
+        '400':
+          description: Format data tidak valid
+
   /album/{id}:
+
     get:
       summary: Mendapatkan album berdasarkan ID
+      tags:
+        - Album
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       responses:
+
         '200':
-          description: Berhasil
+          description: Berhasil mendapatkan album
+
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+
+        '404':
+          description: Album tidak ditemukan
 
     put:
       summary: Mengubah album
+      tags:
+        - Album
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       requestBody:
         required: true
+
         content:
           application/json:
+
             schema:
+
               type: object
+
+              required:
+                - nama_album
+                - tahun
+                - penyanyi_id
+
               properties:
+
                 nama_album:
                   type: string
-                  example: Parachutes Updated
+                  example: X&Y
+
                 tahun:
                   type: integer
-                  example: 2001
+                  example: 2005
+
                 penyanyi_id:
                   type: integer
                   example: 2
+
       responses:
+
         '200':
           description: Album berhasil diubah
 
+        '404':
+          description: Album tidak ditemukan
+
     delete:
       summary: Menghapus album
+      tags:
+        - Album
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       responses:
+
         '200':
           description: Album berhasil dihapus
 
+        '404':
+          description: Album tidak ditemukan
+
+  # =========================
+  # LAGU
+  # =========================
+
   /lagu:
+
     get:
       summary: Mendapatkan semua lagu
+      tags:
+        - Lagu
+
       responses:
+
         '200':
-          description: Berhasil mendapatkan data
+          description: Berhasil mendapatkan data lagu
+
+          content:
+            application/json:
+              schema:
+
+                type: array
+
+                items:
+                  $ref: '#/components/schemas/Lagu'
 
     post:
       summary: Menambahkan lagu
+      tags:
+        - Lagu
+
       requestBody:
         required: true
+
         content:
           application/json:
+
             schema:
+
               type: object
+
               required:
                 - judul
                 - album_id
+
               properties:
+
                 judul:
                   type: string
                   example: Yellow
+
                 album_id:
                   type: integer
                   example: 3
+
       responses:
+
         '201':
           description: Lagu berhasil ditambahkan
 
+        '400':
+          description: Format data tidak valid
+
   /lagu/{id}:
+
     get:
       summary: Mendapatkan lagu berdasarkan ID
+      tags:
+        - Lagu
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       responses:
+
         '200':
-          description: Berhasil
+          description: Berhasil mendapatkan lagu
+
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lagu'
+
+        '404':
+          description: Lagu tidak ditemukan
 
     put:
       summary: Mengubah lagu
+      tags:
+        - Lagu
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       requestBody:
         required: true
+
         content:
           application/json:
+
             schema:
+
               type: object
+
+              required:
+                - judul
+                - album_id
+
               properties:
+
                 judul:
                   type: string
-                  example: Yellow Updated
+                  example: bad updated
+
                 album_id:
                   type: integer
-                  example: 3
+                  example: 1
+
       responses:
+
         '200':
           description: Lagu berhasil diubah
 
+        '404':
+          description: Lagu tidak ditemukan
+
     delete:
       summary: Menghapus lagu
+      tags:
+        - Lagu
+
       parameters:
+
         - name: id
           in: path
           required: true
+
           schema:
             type: integer
+
+          example: 1
+
       responses:
+
         '200':
           description: Lagu berhasil dihapus
+
+        '404':
+          description: Lagu tidak ditemukan
+
+# =========================
+# COMPONENTS
+# =========================
+
+components:
+
+  schemas:
+
+    Penyanyi:
+
+      type: object
+
+      properties:
+
+        id:
+          type: integer
+          example: 1
+
+        nama:
+          type: string
+          example: Wave to Earth
+
+    Album:
+
+      type: object
+
+      properties:
+
+        id:
+          type: integer
+          example: 1
+
+        nama_album:
+          type: string
+          example: 0.1 flaws and all.
+
+        tahun:
+          type: integer
+          example: 2023
+
+        penyanyi_id:
+          type: integer
+          example: 1
+
+    Lagu:
+
+      type: object
+
+      properties:
+
+        id:
+          type: integer
+          example: 1
+
+        judul:
+          type: string
+          example: bad
+
+        album_id:
+          type: integer
+          example: 1

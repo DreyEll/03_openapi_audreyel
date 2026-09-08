@@ -1,0 +1,499 @@
+basePath: /
+definitions:
+  main.Album:
+    properties:
+      id:
+        type: integer
+      nama_album:
+        type: string
+      penyanyi_id:
+        type: integer
+      tahun:
+        type: integer
+    type: object
+  main.Lagu:
+    properties:
+      album_id:
+        type: integer
+      id:
+        type: integer
+      judul:
+        type: string
+    type: object
+  main.Penyanyi:
+    properties:
+      id:
+        type: integer
+      nama:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API untuk mengelola data penyanyi, album, dan lagu.
+  title: Music API
+  version: "1.0"
+paths:
+  /album:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.Album'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mendapatkan semua album
+      tags:
+      - Album
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Data album
+        in: body
+        name: album
+        required: true
+        schema:
+          $ref: '#/definitions/main.Album'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/main.Album'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Menambahkan album
+      tags:
+      - Album
+  /album/{id}:
+    delete:
+      parameters:
+      - description: ID album
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Menghapus album
+      tags:
+      - Album
+    get:
+      parameters:
+      - description: ID album
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Album'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mendapatkan album berdasarkan ID
+      tags:
+      - Album
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID album
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Data album
+        in: body
+        name: album
+        required: true
+        schema:
+          $ref: '#/definitions/main.Album'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Album'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mengubah album
+      tags:
+      - Album
+  /lagu:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.Lagu'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mendapatkan semua lagu
+      tags:
+      - Lagu
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Data lagu
+        in: body
+        name: lagu
+        required: true
+        schema:
+          $ref: '#/definitions/main.Lagu'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/main.Lagu'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Menambahkan lagu
+      tags:
+      - Lagu
+  /lagu/{id}:
+    delete:
+      parameters:
+      - description: ID lagu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Menghapus lagu
+      tags:
+      - Lagu
+    get:
+      parameters:
+      - description: ID lagu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Lagu'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mendapatkan lagu berdasarkan ID
+      tags:
+      - Lagu
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID lagu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Data lagu
+        in: body
+        name: lagu
+        required: true
+        schema:
+          $ref: '#/definitions/main.Lagu'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Lagu'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mengubah lagu
+      tags:
+      - Lagu
+  /penyanyi:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.Penyanyi'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mendapatkan semua penyanyi
+      tags:
+      - Penyanyi
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Data penyanyi
+        in: body
+        name: penyanyi
+        required: true
+        schema:
+          $ref: '#/definitions/main.Penyanyi'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/main.Penyanyi'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Menambahkan penyanyi
+      tags:
+      - Penyanyi
+  /penyanyi/{id}:
+    delete:
+      parameters:
+      - description: ID penyanyi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Menghapus penyanyi
+      tags:
+      - Penyanyi
+    get:
+      parameters:
+      - description: ID penyanyi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Penyanyi'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mendapatkan penyanyi berdasarkan ID
+      tags:
+      - Penyanyi
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID penyanyi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Data penyanyi
+        in: body
+        name: penyanyi
+        required: true
+        schema:
+          $ref: '#/definitions/main.Penyanyi'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Penyanyi'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Mengubah penyanyi
+      tags:
+      - Penyanyi
+swagger: "2.0"
