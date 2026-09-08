@@ -14,8 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
-	_ "music-api/docs"
 	httpSwagger "github.com/swaggo/http-swagger"
+	_ "music-api/docs"
 )
 
 var db *pgxpool.Pool
@@ -40,6 +40,30 @@ type Lagu struct {
 	ID      int    `json:"id"`
 	Judul   string `json:"judul"`
 	AlbumID int    `json:"album_id"`
+}
+
+// =========================
+// HATEOAS RESPONSE
+// =========================
+
+// Link merepresentasikan hypermedia link untuk response Level 3.
+type Link struct {
+	Href string `json:"href"`
+}
+
+// LaguResponse adalah response GET /lagu/{id}
+// yang sudah menggunakan HATEOAS.
+type LaguResponse struct {
+	ID      int       `json:"id"`
+	Judul   string    `json:"judul"`
+	AlbumID int       `json:"album_id"`
+	Links   LaguLinks `json:"_links"`
+}
+
+// LaguLinks berisi dua link untuk navigasi resource.
+type LaguLinks struct {
+	Self  Link `json:"self"`
+	Album Link `json:"album"`
 }
 
 // =========================
@@ -990,7 +1014,7 @@ func getLagu(w http.ResponseWriter, r *http.Request) {
 // @Tags Lagu
 // @Produce json
 // @Param id path int true "ID lagu"
-// @Success 200 {object} Lagu
+// @Success 200 {object} LaguResponse
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /lagu/{id} [get]
@@ -1038,7 +1062,25 @@ func getLaguByID(
 		return
 	}
 
-	jsonResponse(w, 200, l)
+	// =========================
+	// HATEOAS / RMM LEVEL 3
+	// =========================
+
+	response := LaguResponse{
+		ID:      l.ID,
+		Judul:   l.Judul,
+		AlbumID: l.AlbumID,
+		Links: LaguLinks{
+			Self: Link{
+				Href: "/lagu/" + strconv.Itoa(l.ID),
+			},
+			Album: Link{
+				Href: "/album/" + strconv.Itoa(l.AlbumID),
+			},
+		},
+	}
+
+	jsonResponse(w, 200, response)
 }
 
 // POST /lagu

@@ -20,6 +20,29 @@ definitions:
       judul:
         type: string
     type: object
+  main.LaguLinks:
+    properties:
+      album:
+        $ref: '#/definitions/main.Link'
+      self:
+        $ref: '#/definitions/main.Link'
+    type: object
+  main.LaguResponse:
+    properties:
+      _links:
+        $ref: '#/definitions/main.LaguLinks'
+      album_id:
+        type: integer
+      id:
+        type: integer
+      judul:
+        type: string
+    type: object
+  main.Link:
+    properties:
+      href:
+        type: string
+    type: object
   main.Penyanyi:
     properties:
       id:
@@ -281,7 +304,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/main.Lagu'
+            $ref: '#/definitions/main.LaguResponse'
         "404":
           description: Not Found
           schema:

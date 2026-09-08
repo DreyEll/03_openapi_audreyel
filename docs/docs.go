@@ -355,7 +355,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/main.Lagu"
+                            "$ref": "#/definitions/main.LaguResponse"
                         }
                     },
                     "404": {
@@ -749,6 +749,42 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "judul": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.LaguLinks": {
+            "type": "object",
+            "properties": {
+                "album": {
+                    "$ref": "#/definitions/main.Link"
+                },
+                "self": {
+                    "$ref": "#/definitions/main.Link"
+                }
+            }
+        },
+        "main.LaguResponse": {
+            "type": "object",
+            "properties": {
+                "_links": {
+                    "$ref": "#/definitions/main.LaguLinks"
+                },
+                "album_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "judul": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.Link": {
+            "type": "object",
+            "properties": {
+                "href": {
                     "type": "string"
                 }
             }
