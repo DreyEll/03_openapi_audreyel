@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/graphql-go/graphql"
@@ -10,24 +11,20 @@ import (
 )
 
 // ============================================================
+// COUNTER N+1
+// ============================================================
+
+// Menghitung berapa kali Query.penyanyi dipanggil
+var queryPenyanyiCallCount = 0
+
+// Menghitung berapa kali resolver relasi Penyanyi.album dipanggil
+var resolverCallCount = 0
+
+// ============================================================
 // CREATE GRAPHQL SCHEMA
 // ============================================================
 
 func createGraphQLSchema() (graphql.Schema, error) {
-
-	// ========================================================
-	// PENYANYI TYPE
-	// ========================================================
-
-	penyanyiType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Penyanyi",
-
-		Fields: graphql.Fields{
-			"nama": &graphql.Field{
-				Type: graphql.String,
-			},
-		},
-	})
 
 	// ========================================================
 	// ALBUM TYPE
@@ -44,43 +41,94 @@ func createGraphQLSchema() (graphql.Schema, error) {
 			"tahun": &graphql.Field{
 				Type: graphql.Int,
 			},
+		},
+	})
+
+	// ========================================================
+	// PENYANYI TYPE
+	// ========================================================
+
+	penyanyiType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Penyanyi",
+
+		Fields: graphql.Fields{
+
+			"nama": &graphql.Field{
+				Type: graphql.String,
+			},
 
 			// Relasi:
-			// album.penyanyi_id -> penyanyi.id
-			"penyanyi": &graphql.Field{
-				Type: penyanyiType,
+			// penyanyi.id -> album.penyanyi_id
+			"album": &graphql.Field{
+				Type: graphql.NewList(albumType),
 
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 
-					album, ok := p.Source.(map[string]interface{})
+					// Counter resolver relasi
+					resolverCallCount++
+
+					log.Printf(
+						"Penyanyi.album resolver dipanggil ke-%d",
+						resolverCallCount,
+					)
+
+					penyanyi, ok := p.Source.(map[string]interface{})
 					if !ok {
 						return nil, nil
 					}
 
-					penyanyiID, ok := album["penyanyi_id"].(int)
+					penyanyiID, ok := penyanyi["id"].(int)
 					if !ok {
 						return nil, nil
 					}
 
-					var nama string
-
-					err := db.QueryRow(
+					rows, err := db.Query(
 						context.Background(),
 						`
-						SELECT nama
-						FROM penyanyi
-						WHERE id = $1
+						SELECT nama_album, tahun
+						FROM album
+						WHERE penyanyi_id = $1
+						ORDER BY id
 						`,
 						penyanyiID,
-					).Scan(&nama)
+					)
 
 					if err != nil {
 						return nil, err
 					}
 
-					return map[string]interface{}{
-						"nama": nama,
-					}, nil
+					defer rows.Close()
+
+					albumList := []interface{}{}
+
+					for rows.Next() {
+
+						var namaAlbum string
+						var tahun int
+
+						err := rows.Scan(
+							&namaAlbum,
+							&tahun,
+						)
+
+						if err != nil {
+							return nil, err
+						}
+
+						albumList = append(
+							albumList,
+							map[string]interface{}{
+								"nama_album": namaAlbum,
+								"tahun":      tahun,
+							},
+						)
+					}
+
+					if err := rows.Err(); err != nil {
+						return nil, err
+					}
+
+					return albumList, nil
 				},
 			},
 		},
@@ -94,56 +142,8 @@ func createGraphQLSchema() (graphql.Schema, error) {
 		Name: "Lagu",
 
 		Fields: graphql.Fields{
-
 			"judul": &graphql.Field{
 				Type: graphql.String,
-			},
-
-			// Relasi:
-			// lagu.album_id -> album.id
-			"album": &graphql.Field{
-				Type: albumType,
-
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-
-					lagu, ok := p.Source.(map[string]interface{})
-					if !ok {
-						return nil, nil
-					}
-
-					albumID, ok := lagu["album_id"].(int)
-					if !ok {
-						return nil, nil
-					}
-
-					var namaAlbum string
-					var tahun int
-					var penyanyiID int
-
-					err := db.QueryRow(
-						context.Background(),
-						`
-						SELECT nama_album, tahun, penyanyi_id
-						FROM album
-						WHERE id = $1
-						`,
-						albumID,
-					).Scan(
-						&namaAlbum,
-						&tahun,
-						&penyanyiID,
-					)
-
-					if err != nil {
-						return nil, err
-					}
-
-					return map[string]interface{}{
-						"nama_album":  namaAlbum,
-						"tahun":       tahun,
-						"penyanyi_id": penyanyiID,
-					}, nil
-				},
 			},
 		},
 	})
@@ -158,6 +158,71 @@ func createGraphQLSchema() (graphql.Schema, error) {
 		Fields: graphql.Fields{
 
 			// ==================================================
+			// PENYANYI
+			// ==================================================
+
+			"penyanyi": &graphql.Field{
+				Type: graphql.NewList(penyanyiType),
+
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+
+					// Counter query utama
+					queryPenyanyiCallCount++
+
+					log.Printf(
+						"Query.penyanyi dipanggil ke-%d",
+						queryPenyanyiCallCount,
+					)
+
+					rows, err := db.Query(
+						context.Background(),
+						`
+						SELECT id, nama
+						FROM penyanyi
+						ORDER BY id
+						`,
+					)
+
+					if err != nil {
+						return nil, err
+					}
+
+					defer rows.Close()
+
+					penyanyiList := []interface{}{}
+
+					for rows.Next() {
+
+						var id int
+						var nama string
+
+						err := rows.Scan(
+							&id,
+							&nama,
+						)
+
+						if err != nil {
+							return nil, err
+						}
+
+						penyanyiList = append(
+							penyanyiList,
+							map[string]interface{}{
+								"id":   id,
+								"nama": nama,
+							},
+						)
+					}
+
+					if err := rows.Err(); err != nil {
+						return nil, err
+					}
+
+					return penyanyiList, nil
+				},
+			},
+
+			// ==================================================
 			// LAGU
 			// ==================================================
 
@@ -169,7 +234,7 @@ func createGraphQLSchema() (graphql.Schema, error) {
 					rows, err := db.Query(
 						context.Background(),
 						`
-						SELECT id, judul, album_id
+						SELECT id, judul
 						FROM lagu
 						ORDER BY id
 						`,
@@ -187,12 +252,10 @@ func createGraphQLSchema() (graphql.Schema, error) {
 
 						var id int
 						var judul string
-						var albumID int
 
 						err := rows.Scan(
 							&id,
 							&judul,
-							&albumID,
 						)
 
 						if err != nil {
@@ -202,9 +265,8 @@ func createGraphQLSchema() (graphql.Schema, error) {
 						laguList = append(
 							laguList,
 							map[string]interface{}{
-								"id":       id,
-								"judul":    judul,
-								"album_id": albumID,
+								"id":    id,
+								"judul": judul,
 							},
 						)
 					}
@@ -301,7 +363,17 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute GraphQL
+	// ========================================================
+	// RESET COUNTER
+	// ========================================================
+
+	queryPenyanyiCallCount = 0
+	resolverCallCount = 0
+
+	// ========================================================
+	// EXECUTE GRAPHQL
+	// ========================================================
+
 	result := graphql.Do(
 		graphql.Params{
 			Schema:         schema,
@@ -310,6 +382,30 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 			OperationName:  request.OperationName,
 		},
 	)
+
+	// ========================================================
+	// TAMPILKAN HASIL N+1
+	// ========================================================
+
+	// Hanya tampilkan jika Query.penyanyi benar-benar dipanggil
+	if queryPenyanyiCallCount > 0 {
+
+		log.Printf(
+			"Query.penyanyi dipanggil: %d kali",
+			queryPenyanyiCallCount,
+		)
+
+		log.Printf(
+			"Resolver Penyanyi.album dipanggil: %d kali",
+			resolverCallCount,
+		)
+
+		log.Printf(
+			"Prediksi N+1: 1 + %d = %d",
+			resolverCallCount,
+			1+resolverCallCount,
+		)
+	}
 
 	w.Header().Set(
 		"Content-Type",
