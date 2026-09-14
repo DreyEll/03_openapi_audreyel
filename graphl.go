@@ -16,6 +16,20 @@ import (
 func createGraphQLSchema() (graphql.Schema, error) {
 
 	// ========================================================
+	// PENYANYI TYPE
+	// ========================================================
+
+	penyanyiType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Penyanyi",
+
+		Fields: graphql.Fields{
+			"nama": &graphql.Field{
+				Type: graphql.String,
+			},
+		},
+	})
+
+	// ========================================================
 	// ALBUM TYPE
 	// ========================================================
 
@@ -23,79 +37,93 @@ func createGraphQLSchema() (graphql.Schema, error) {
 		Name: "Album",
 
 		Fields: graphql.Fields{
-			"name": &graphql.Field{
+			"nama_album": &graphql.Field{
 				Type: graphql.String,
 			},
 
-			"year": &graphql.Field{
+			"tahun": &graphql.Field{
 				Type: graphql.Int,
+			},
+
+			// Relasi:
+			// album.penyanyi_id -> penyanyi.id
+			"penyanyi": &graphql.Field{
+				Type: penyanyiType,
+
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+
+					album, ok := p.Source.(map[string]interface{})
+					if !ok {
+						return nil, nil
+					}
+
+					penyanyiID, ok := album["penyanyi_id"].(int)
+					if !ok {
+						return nil, nil
+					}
+
+					var nama string
+
+					err := db.QueryRow(
+						context.Background(),
+						`
+						SELECT nama
+						FROM penyanyi
+						WHERE id = $1
+						`,
+						penyanyiID,
+					).Scan(&nama)
+
+					if err != nil {
+						return nil, err
+					}
+
+					return map[string]interface{}{
+						"nama": nama,
+					}, nil
+				},
 			},
 		},
 	})
 
 	// ========================================================
-	// PRODUCT TYPE
-	// products = data dari tabel lagu
-	// name = judul lagu
-	// album = relasi ke tabel album
+	// LAGU TYPE
 	// ========================================================
 
-	productType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Product",
+	laguType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Lagu",
 
 		Fields: graphql.Fields{
 
-			// ------------------------------------------------
-			// name
-			// GraphQL: name
-			// Database: lagu.judul
-			// ------------------------------------------------
-
-			"name": &graphql.Field{
+			"judul": &graphql.Field{
 				Type: graphql.String,
-
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-
-					product, ok := p.Source.(map[string]interface{})
-
-					if !ok {
-						return nil, nil
-					}
-
-					return product["name"], nil
-				},
 			},
 
-			// ------------------------------------------------
-			// album
 			// Relasi:
 			// lagu.album_id -> album.id
-			// ------------------------------------------------
-
 			"album": &graphql.Field{
 				Type: albumType,
 
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 
-					product, ok := p.Source.(map[string]interface{})
-
+					lagu, ok := p.Source.(map[string]interface{})
 					if !ok {
 						return nil, nil
 					}
 
-					albumID, ok := product["album_id"].(int)
-
+					albumID, ok := lagu["album_id"].(int)
 					if !ok {
 						return nil, nil
 					}
 
 					var namaAlbum string
 					var tahun int
+					var penyanyiID int
 
 					err := db.QueryRow(
 						context.Background(),
 						`
-						SELECT nama_album, tahun
+						SELECT nama_album, tahun, penyanyi_id
 						FROM album
 						WHERE id = $1
 						`,
@@ -103,6 +131,7 @@ func createGraphQLSchema() (graphql.Schema, error) {
 					).Scan(
 						&namaAlbum,
 						&tahun,
+						&penyanyiID,
 					)
 
 					if err != nil {
@@ -110,8 +139,9 @@ func createGraphQLSchema() (graphql.Schema, error) {
 					}
 
 					return map[string]interface{}{
-						"name": namaAlbum,
-						"year": tahun,
+						"nama_album":  namaAlbum,
+						"tahun":       tahun,
+						"penyanyi_id": penyanyiID,
 					}, nil
 				},
 			},
@@ -127,8 +157,12 @@ func createGraphQLSchema() (graphql.Schema, error) {
 
 		Fields: graphql.Fields{
 
-			"products": &graphql.Field{
-				Type: graphql.NewList(productType),
+			// ==================================================
+			// LAGU
+			// ==================================================
+
+			"lagu": &graphql.Field{
+				Type: graphql.NewList(laguType),
 
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 
@@ -147,7 +181,7 @@ func createGraphQLSchema() (graphql.Schema, error) {
 
 					defer rows.Close()
 
-					products := []interface{}{}
+					laguList := []interface{}{}
 
 					for rows.Next() {
 
@@ -165,11 +199,11 @@ func createGraphQLSchema() (graphql.Schema, error) {
 							return nil, err
 						}
 
-						products = append(
-							products,
+						laguList = append(
+							laguList,
 							map[string]interface{}{
 								"id":       id,
-								"name":     judul,
+								"judul":    judul,
 								"album_id": albumID,
 							},
 						)
@@ -179,7 +213,7 @@ func createGraphQLSchema() (graphql.Schema, error) {
 						return nil, err
 					}
 
-					return products, nil
+					return laguList, nil
 				},
 			},
 		},
@@ -202,7 +236,6 @@ func createGraphQLSchema() (graphql.Schema, error) {
 
 func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 
-	// Hanya menerima GET dan POST.
 	if r.Method != http.MethodGet &&
 		r.Method != http.MethodPost {
 
@@ -214,10 +247,6 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
-
-	// --------------------------------------------------------
-	// Buat GraphQL schema
-	// --------------------------------------------------------
 
 	schema, err := createGraphQLSchema()
 
@@ -232,20 +261,13 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --------------------------------------------------------
-	// Request GraphQL
-	// --------------------------------------------------------
-
 	var request struct {
 		Query         string                 `json:"query"`
 		Variables     map[string]interface{} `json:"variables"`
 		OperationName string                 `json:"operationName"`
 	}
 
-	// --------------------------------------------------------
 	// POST
-	// --------------------------------------------------------
-
 	if r.Method == http.MethodPost {
 
 		err := json.NewDecoder(r.Body).Decode(&request)
@@ -262,18 +284,12 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// --------------------------------------------------------
 	// GET
-	// --------------------------------------------------------
-
 	if r.Method == http.MethodGet {
 		request.Query = r.URL.Query().Get("query")
 	}
 
-	// --------------------------------------------------------
 	// Query kosong
-	// --------------------------------------------------------
-
 	if request.Query == "" {
 
 		errorResponse(
@@ -285,10 +301,7 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --------------------------------------------------------
 	// Execute GraphQL
-	// --------------------------------------------------------
-
 	result := graphql.Do(
 		graphql.Params{
 			Schema:         schema,
@@ -297,10 +310,6 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 			OperationName:  request.OperationName,
 		},
 	)
-
-	// --------------------------------------------------------
-	// Response
-	// --------------------------------------------------------
 
 	w.Header().Set(
 		"Content-Type",
@@ -319,20 +328,16 @@ func graphqlRoute() http.Handler {
 	return cors.New(
 		cors.Options{
 
-			// Apollo Sandbox
 			AllowedOrigins: []string{
 				"https://studio.apollographql.com",
 			},
 
-			// GraphQL membutuhkan GET dan POST.
-			// OPTIONS digunakan untuk CORS preflight.
 			AllowedMethods: []string{
 				"GET",
 				"POST",
 				"OPTIONS",
 			},
 
-			// Header yang dapat dikirim Apollo Sandbox.
 			AllowedHeaders: []string{
 				"Content-Type",
 				"Accept",
@@ -343,7 +348,6 @@ func graphqlRoute() http.Handler {
 				"Apollographql-Client-Version",
 			},
 
-			// Mengizinkan browser menerima response.
 			AllowCredentials: false,
 		},
 	).Handler(
