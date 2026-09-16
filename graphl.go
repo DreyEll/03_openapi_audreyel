@@ -45,6 +45,29 @@ func createGraphQLSchema() (graphql.Schema, error) {
 	})
 
 	// ========================================================
+	// LAGU TYPE
+	// ========================================================
+
+	laguType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Lagu",
+
+		Fields: graphql.Fields{
+
+			"id": &graphql.Field{
+				Type: graphql.Int,
+			},
+
+			"judul": &graphql.Field{
+				Type: graphql.String,
+			},
+
+			"album_id": &graphql.Field{
+				Type: graphql.Int,
+			},
+		},
+	})
+
+	// ========================================================
 	// PENYANYI TYPE
 	// ========================================================
 
@@ -53,12 +76,18 @@ func createGraphQLSchema() (graphql.Schema, error) {
 
 		Fields: graphql.Fields{
 
+			"id": &graphql.Field{
+				Type: graphql.Int,
+			},
+
 			"nama": &graphql.Field{
 				Type: graphql.String,
 			},
 
-			// Relasi:
-			// penyanyi.id -> album.penyanyi_id
+			// ------------------------------------------------
+			// Relasi Penyanyi -> Album
+			// ------------------------------------------------
+
 			"album": &graphql.Field{
 				Type: graphql.NewList(albumType),
 
@@ -135,20 +164,6 @@ func createGraphQLSchema() (graphql.Schema, error) {
 	})
 
 	// ========================================================
-	// LAGU TYPE
-	// ========================================================
-
-	laguType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Lagu",
-
-		Fields: graphql.Fields{
-			"judul": &graphql.Field{
-				Type: graphql.String,
-			},
-		},
-	})
-
-	// ========================================================
 	// QUERY TYPE
 	// ========================================================
 
@@ -158,7 +173,7 @@ func createGraphQLSchema() (graphql.Schema, error) {
 		Fields: graphql.Fields{
 
 			// ==================================================
-			// PENYANYI
+			// QUERY PENYANYI
 			// ==================================================
 
 			"penyanyi": &graphql.Field{
@@ -166,7 +181,6 @@ func createGraphQLSchema() (graphql.Schema, error) {
 
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 
-					// Counter query utama
 					queryPenyanyiCallCount++
 
 					log.Printf(
@@ -223,7 +237,7 @@ func createGraphQLSchema() (graphql.Schema, error) {
 			},
 
 			// ==================================================
-			// LAGU
+			// QUERY LAGU
 			// ==================================================
 
 			"lagu": &graphql.Field{
@@ -234,7 +248,7 @@ func createGraphQLSchema() (graphql.Schema, error) {
 					rows, err := db.Query(
 						context.Background(),
 						`
-						SELECT id, judul
+						SELECT id, judul, album_id
 						FROM lagu
 						ORDER BY id
 						`,
@@ -252,10 +266,12 @@ func createGraphQLSchema() (graphql.Schema, error) {
 
 						var id int
 						var judul string
+						var albumID int
 
 						err := rows.Scan(
 							&id,
 							&judul,
+							&albumID,
 						)
 
 						if err != nil {
@@ -265,8 +281,9 @@ func createGraphQLSchema() (graphql.Schema, error) {
 						laguList = append(
 							laguList,
 							map[string]interface{}{
-								"id":    id,
-								"judul": judul,
+								"id":       id,
+								"judul":    judul,
+								"album_id": albumID,
 							},
 						)
 					}
@@ -282,12 +299,176 @@ func createGraphQLSchema() (graphql.Schema, error) {
 	})
 
 	// ========================================================
+	// MUTATION TYPE
+	// ========================================================
+
+	mutationType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Mutation",
+
+		Fields: graphql.Fields{
+
+			// ==================================================
+			// CREATE LAGU
+			// ==================================================
+
+			"createLagu": &graphql.Field{
+
+				Type: laguType,
+
+				Args: graphql.FieldConfigArgument{
+
+					"judul": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.String),
+					},
+
+					"album_id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+				},
+
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+
+					judul := p.Args["judul"].(string)
+					albumID := p.Args["album_id"].(int)
+
+					var id int
+
+					err := db.QueryRow(
+						context.Background(),
+						`
+						INSERT INTO lagu (judul, album_id)
+						VALUES ($1, $2)
+						RETURNING id
+						`,
+						judul,
+						albumID,
+					).Scan(&id)
+
+					if err != nil {
+						return nil, err
+					}
+
+					return map[string]interface{}{
+						"id":       id,
+						"judul":    judul,
+						"album_id": albumID,
+					}, nil
+				},
+			},
+
+			// ==================================================
+			// UPDATE LAGU
+			// ==================================================
+
+			"updateLagu": &graphql.Field{
+
+				Type: laguType,
+
+				Args: graphql.FieldConfigArgument{
+
+					"id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+
+					"judul": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.String),
+					},
+				},
+
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+
+					id := p.Args["id"].(int)
+					judul := p.Args["judul"].(string)
+
+					result, err := db.Exec(
+						context.Background(),
+						`
+						UPDATE lagu
+						SET judul = $1
+						WHERE id = $2
+						`,
+						judul,
+						id,
+					)
+
+					if err != nil {
+						return nil, err
+					}
+
+					if result.RowsAffected() == 0 {
+						return nil, nil
+					}
+
+					var albumID int
+
+					err = db.QueryRow(
+						context.Background(),
+						`
+						SELECT album_id
+						FROM lagu
+						WHERE id = $1
+						`,
+						id,
+					).Scan(&albumID)
+
+					if err != nil {
+						return nil, err
+					}
+
+					return map[string]interface{}{
+						"id":       id,
+						"judul":    judul,
+						"album_id": albumID,
+					}, nil
+				},
+			},
+
+			// ==================================================
+			// DELETE LAGU
+			// ==================================================
+
+			"deleteLagu": &graphql.Field{
+
+				Type: graphql.Boolean,
+
+				Args: graphql.FieldConfigArgument{
+
+					"id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+				},
+
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+
+					id := p.Args["id"].(int)
+
+					result, err := db.Exec(
+						context.Background(),
+						`
+						DELETE FROM lagu
+						WHERE id = $1
+						`,
+						id,
+					)
+
+					if err != nil {
+						return nil, err
+					}
+
+					return result.RowsAffected() > 0, nil
+				},
+			},
+		},
+	})
+
+	// ========================================================
 	// CREATE SCHEMA
 	// ========================================================
 
 	return graphql.NewSchema(
 		graphql.SchemaConfig{
-			Query: queryType,
+			Query:    queryType,
+			Mutation: mutationType,
 		},
 	)
 }
@@ -387,7 +568,6 @@ func graphqlHandler(w http.ResponseWriter, r *http.Request) {
 	// TAMPILKAN HASIL N+1
 	// ========================================================
 
-	// Hanya tampilkan jika Query.penyanyi benar-benar dipanggil
 	if queryPenyanyiCallCount > 0 {
 
 		log.Printf(
