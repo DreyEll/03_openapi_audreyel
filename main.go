@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,15 +15,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
+	"google.golang.org/grpc"
+
 	httpSwagger "github.com/swaggo/http-swagger"
 	_ "music-api/docs"
+	music "music-api/music"
 )
 
 var db *pgxpool.Pool
 
-// =========================
+// ============================================================
 // MODEL
-// =========================
+// ============================================================
 
 type Penyanyi struct {
 	ID   int    `json:"id"`
@@ -42,9 +46,9 @@ type Lagu struct {
 	AlbumID int    `json:"album_id"`
 }
 
-// =========================
+// ============================================================
 // HATEOAS RESPONSE
-// =========================
+// ============================================================
 
 type Link struct {
 	Href string `json:"href"`
@@ -62,25 +66,37 @@ type LaguLinks struct {
 	Album Link `json:"album"`
 }
 
-// =========================
-// RESPONSE
-// =========================
+// ============================================================
+// RESPONSE HELPER
+// ============================================================
 
-func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
+func jsonResponse(
+	w http.ResponseWriter,
+	status int,
+	data interface{},
+) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-func errorResponse(w http.ResponseWriter, status int, message string) {
-	jsonResponse(w, status, map[string]string{
-		"error": message,
-	})
+func errorResponse(
+	w http.ResponseWriter,
+	status int,
+	message string,
+) {
+	jsonResponse(
+		w,
+		status,
+		map[string]string{
+			"error": message,
+		},
+	)
 }
 
-// =========================
+// ============================================================
 // MAIN
-// =========================
+// ============================================================
 
 // @title Music API
 // @version 1.0
@@ -90,7 +106,15 @@ func errorResponse(w http.ResponseWriter, status int, message string) {
 
 func main() {
 
+	// ========================================================
+	// LOAD ENV
+	// ========================================================
+
 	_ = godotenv.Load()
+
+	// ========================================================
+	// DATABASE
+	// ========================================================
 
 	databaseURL := os.Getenv("DATABASE_URL")
 
@@ -106,56 +130,97 @@ func main() {
 	)
 
 	if err != nil {
-		log.Fatal("Gagal membuat koneksi database:", err)
+		log.Fatal(
+			"Gagal membuat koneksi database:",
+			err,
+		)
 	}
 
 	defer db.Close()
 
 	if err := db.Ping(context.Background()); err != nil {
-		log.Fatal("Gagal terhubung ke Neon:", err)
+		log.Fatal(
+			"Gagal terhubung ke database:",
+			err,
+		)
 	}
 
-	log.Println("Database Neon berhasil terhubung")
+	log.Println("Database berhasil terhubung")
 
-	// =========================
-	// REST API ROUTES
-	// =========================
+	// ========================================================
+	// REST ROUTES
+	// ========================================================
 
 	http.HandleFunc("/", homeHandler)
 
-	http.HandleFunc("/penyanyi", penyanyiHandler)
-	http.HandleFunc("/penyanyi/", penyanyiHandler)
+	http.HandleFunc(
+		"/penyanyi",
+		penyanyiHandler,
+	)
 
-	http.HandleFunc("/album", albumHandler)
-	http.HandleFunc("/album/", albumHandler)
+	http.HandleFunc(
+		"/penyanyi/",
+		penyanyiHandler,
+	)
 
-	http.HandleFunc("/lagu", laguHandler)
-	http.HandleFunc("/lagu/", laguHandler)
+	http.HandleFunc(
+		"/album",
+		albumHandler,
+	)
 
-	// =========================
+	http.HandleFunc(
+		"/album/",
+		albumHandler,
+	)
+
+	http.HandleFunc(
+		"/lagu",
+		laguHandler,
+	)
+
+	http.HandleFunc(
+		"/lagu/",
+		laguHandler,
+	)
+
+	// ========================================================
 	// GRAPHQL
-	// =========================
+	// ========================================================
 
-	// Fungsi graphqlRoute() berada di graphl.go
-	http.Handle("/graphql", graphqlRoute())
+	http.Handle(
+		"/graphql",
+		graphqlRoute(),
+	)
 
-	// =========================
+	// ========================================================
 	// OPENAPI
-	// =========================
+	// ========================================================
 
-	http.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./openapi.yaml")
-	})
+	http.HandleFunc(
+		"/openapi.yaml",
+		func(w http.ResponseWriter, r *http.Request) {
 
-	// =========================
-	// SWAGGER UI
-	// =========================
+			http.ServeFile(
+				w,
+				r,
+				"./openapi.yaml",
+			)
 
-	http.Handle("/swagger/", httpSwagger.WrapHandler)
+		},
+	)
 
-	// =========================
-	// PORT
-	// =========================
+	// ========================================================
+	// SWAGGER
+	// ========================================================
+
+	http.Handle(
+		"/swagger/",
+		httpSwagger.WrapHandler,
+	)
+
+	// ========================================================
+	// HTTP PORT
+	// ========================================================
 
 	port := os.Getenv("PORT")
 
@@ -163,84 +228,294 @@ func main() {
 		port = "8080"
 	}
 
-	log.Println("Music API berjalan di port:", port)
+	// ========================================================
+	// HTTP LISTENER
+	// ========================================================
 
-	server := &http.Server{
-		Addr:              ":" + port,
+	httpListener, err := net.Listen(
+		"tcp",
+		"0.0.0.0:"+port,
+	)
+
+	if err != nil {
+		log.Fatal(
+			"Gagal membuka HTTP port:",
+			err,
+		)
+	}
+
+	// ========================================================
+	// gRPC LISTENER
+	// ========================================================
+	//
+	// LOCAL:
+	// localhost:50051
+	//
+	// RAILWAY:
+	// iriguchi.proxy.rlwy.net:53927
+	//
+	// Railway TCP Proxy:
+	//
+	// iriguchi.proxy.rlwy.net:53927
+	//             |
+	//             v
+	//       0.0.0.0:50051
+	//
+	// ========================================================
+
+	grpcListener, err := net.Listen(
+		"tcp",
+		"0.0.0.0:50051",
+	)
+
+	if err != nil {
+		log.Fatal(
+			"Gagal membuka gRPC port:",
+			err,
+		)
+	}
+
+	// ========================================================
+	// gRPC SERVER
+	// ========================================================
+
+	grpcServer := grpc.NewServer()
+
+	music.RegisterLaguServiceServer(
+		grpcServer,
+		&LaguGRPCServer{},
+	)
+
+	// ========================================================
+	// HTTP SERVER
+	// ========================================================
+
+	httpServer := &http.Server{
+		Handler:           http.DefaultServeMux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	log.Fatal(server.ListenAndServe())
+	// ========================================================
+	// LOG
+	// ========================================================
+
+	log.Println("======================================")
+	log.Println("       MUSIC API BERHASIL START")
+	log.Println("======================================")
+
+	log.Println(
+		"REST     : http://localhost:" + port,
+	)
+
+	log.Println(
+		"GraphQL  : http://localhost:" +
+			port +
+			"/graphql",
+	)
+
+	log.Println(
+		"Swagger  : http://localhost:" +
+			port +
+			"/swagger/",
+	)
+
+	log.Println(
+		"gRPC     : 0.0.0.0:50051",
+	)
+
+	log.Println(
+		"Railway  : iriguchi.proxy.rlwy.net:53927",
+	)
+
+	log.Println("======================================")
+
+	// ========================================================
+	// RUN gRPC
+	// ========================================================
+
+	go func() {
+
+		log.Println(
+			"gRPC server berjalan di 0.0.0.0:50051...",
+		)
+
+		if err := grpcServer.Serve(
+			grpcListener,
+		); err != nil {
+
+			log.Fatal(
+				"gRPC server error:",
+				err,
+			)
+		}
+
+	}()
+
+	// ========================================================
+	// RUN HTTP
+	// ========================================================
+
+	go func() {
+
+		log.Println(
+			"HTTP server berjalan di 0.0.0.0:" +
+				port +
+				"...",
+		)
+
+		if err := httpServer.Serve(
+			httpListener,
+		); err != nil &&
+			err != http.ErrServerClosed {
+
+			log.Fatal(
+				"HTTP server error:",
+				err,
+			)
+		}
+
+	}()
+
+	// ========================================================
+	// KEEP PROGRAM RUNNING
+	// ========================================================
+
+	select {}
 }
 
-// =========================
+// ============================================================
 // HOME
-// =========================
+// ============================================================
 
-func homeHandler(w http.ResponseWriter, r *http.Request) {
+func homeHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
 	if r.URL.Path != "/" {
-		errorResponse(w, http.StatusNotFound, "Endpoint tidak ditemukan")
+
+		errorResponse(
+			w,
+			http.StatusNotFound,
+			"Endpoint tidak ditemukan",
+		)
+
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]string{
-		"message": "Music API berhasil berjalan",
-		"openapi": "/openapi.yaml",
-		"graphql": "/graphql",
-	})
+	jsonResponse(
+		w,
+		http.StatusOK,
+		map[string]string{
+			"message": "Music API berhasil berjalan",
+			"openapi": "/openapi.yaml",
+			"graphql": "/graphql",
+		},
+	)
 }
 
 // ============================================================
 // PENYANYI
 // ============================================================
 
-func penyanyiHandler(w http.ResponseWriter, r *http.Request) {
+func penyanyiHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
-	id, hasID := getIDFromPath(r.URL.Path)
+	id, hasID := getIDFromPath(
+		r.URL.Path,
+	)
 
 	switch r.Method {
 
 	case http.MethodGet:
 
 		if hasID {
-			getPenyanyiByID(w, r, id)
+
+			getPenyanyiByID(
+				w,
+				r,
+				id,
+			)
+
 		} else {
-			getPenyanyi(w, r)
+
+			getPenyanyi(
+				w,
+				r,
+			)
 		}
 
 	case http.MethodPost:
 
 		if hasID {
-			errorResponse(w, 400, "POST tidak membutuhkan ID")
+
+			errorResponse(
+				w,
+				400,
+				"POST tidak membutuhkan ID",
+			)
+
 			return
 		}
 
-		createPenyanyi(w, r)
+		createPenyanyi(
+			w,
+			r,
+		)
 
 	case http.MethodPut:
 
 		if !hasID {
-			errorResponse(w, 400, "ID wajib diisi")
+
+			errorResponse(
+				w,
+				400,
+				"ID wajib diisi",
+			)
+
 			return
 		}
 
-		updatePenyanyi(w, r, id)
+		updatePenyanyi(
+			w,
+			r,
+			id,
+		)
 
 	case http.MethodDelete:
 
 		if !hasID {
-			errorResponse(w, 400, "ID wajib diisi")
+
+			errorResponse(
+				w,
+				400,
+				"ID wajib diisi",
+			)
+
 			return
 		}
 
-		deletePenyanyi(w, r, id)
+		deletePenyanyi(
+			w,
+			r,
+			id,
+		)
 
 	default:
 
-		errorResponse(w, 405, "Method tidak diperbolehkan")
+		errorResponse(
+			w,
+			405,
+			"Method tidak diperbolehkan",
+		)
 	}
 }
+
+// ============================================================
+// GET ALL PENYANYI
+// ============================================================
 
 // getPenyanyi godoc
 // @Summary Mendapatkan semua penyanyi
@@ -249,7 +524,11 @@ func penyanyiHandler(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {array} Penyanyi
 // @Failure 500 {object} map[string]string
 // @Router /penyanyi [get]
-func getPenyanyi(w http.ResponseWriter, r *http.Request) {
+
+func getPenyanyi(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
 	rows, err := db.Query(
 		r.Context(),
@@ -257,7 +536,13 @@ func getPenyanyi(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
@@ -274,15 +559,31 @@ func getPenyanyi(w http.ResponseWriter, r *http.Request) {
 			&p.Nama,
 		); err != nil {
 
-			errorResponse(w, 500, err.Error())
+			errorResponse(
+				w,
+				500,
+				err.Error(),
+			)
+
 			return
 		}
 
-		data = append(data, p)
+		data = append(
+			data,
+			p,
+		)
 	}
 
-	jsonResponse(w, 200, data)
+	jsonResponse(
+		w,
+		200,
+		data,
+	)
 }
+
+// ============================================================
+// GET PENYANYI BY ID
+// ============================================================
 
 // getPenyanyiByID godoc
 // @Summary Mendapatkan penyanyi berdasarkan ID
@@ -293,7 +594,12 @@ func getPenyanyi(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /penyanyi/{id} [get]
-func getPenyanyiByID(w http.ResponseWriter, r *http.Request, id int) {
+
+func getPenyanyiByID(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	var p Penyanyi
 
@@ -307,17 +613,37 @@ func getPenyanyiByID(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err == pgx.ErrNoRows {
-		errorResponse(w, 404, "Penyanyi tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Penyanyi tidak ditemukan",
+		)
+
 		return
 	}
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 200, p)
+	jsonResponse(
+		w,
+		200,
+		p,
+	)
 }
+
+// ============================================================
+// CREATE PENYANYI
+// ============================================================
 
 // createPenyanyi godoc
 // @Summary Menambahkan penyanyi
@@ -329,17 +655,35 @@ func getPenyanyiByID(w http.ResponseWriter, r *http.Request, id int) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /penyanyi [post]
-func createPenyanyi(w http.ResponseWriter, r *http.Request) {
+
+func createPenyanyi(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
 	var p Penyanyi
 
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		errorResponse(w, 400, "Format JSON tidak valid")
+	if err := json.NewDecoder(
+		r.Body,
+	).Decode(&p); err != nil {
+
+		errorResponse(
+			w,
+			400,
+			"Format JSON tidak valid",
+		)
+
 		return
 	}
 
 	if strings.TrimSpace(p.Nama) == "" {
-		errorResponse(w, 400, "Nama penyanyi wajib diisi")
+
+		errorResponse(
+			w,
+			400,
+			"Nama penyanyi wajib diisi",
+		)
+
 		return
 	}
 
@@ -351,15 +695,31 @@ func createPenyanyi(w http.ResponseWriter, r *http.Request) {
 		RETURNING id
 		`,
 		p.Nama,
-	).Scan(&p.ID)
+	).Scan(
+		&p.ID,
+	)
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 201, p)
+	jsonResponse(
+		w,
+		201,
+		p,
+	)
 }
+
+// ============================================================
+// UPDATE PENYANYI
+// ============================================================
 
 // updatePenyanyi godoc
 // @Summary Mengubah penyanyi
@@ -373,17 +733,36 @@ func createPenyanyi(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /penyanyi/{id} [put]
-func updatePenyanyi(w http.ResponseWriter, r *http.Request, id int) {
+
+func updatePenyanyi(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	var p Penyanyi
 
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		errorResponse(w, 400, "Format JSON tidak valid")
+	if err := json.NewDecoder(
+		r.Body,
+	).Decode(&p); err != nil {
+
+		errorResponse(
+			w,
+			400,
+			"Format JSON tidak valid",
+		)
+
 		return
 	}
 
 	if strings.TrimSpace(p.Nama) == "" {
-		errorResponse(w, 400, "Nama penyanyi wajib diisi")
+
+		errorResponse(
+			w,
+			400,
+			"Nama penyanyi wajib diisi",
+		)
+
 		return
 	}
 
@@ -403,17 +782,37 @@ func updatePenyanyi(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err == pgx.ErrNoRows {
-		errorResponse(w, 404, "Penyanyi tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Penyanyi tidak ditemukan",
+		)
+
 		return
 	}
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 200, p)
+	jsonResponse(
+		w,
+		200,
+		p,
+	)
 }
+
+// ============================================================
+// DELETE PENYANYI
+// ============================================================
 
 // deletePenyanyi godoc
 // @Summary Menghapus penyanyi
@@ -424,7 +823,12 @@ func updatePenyanyi(w http.ResponseWriter, r *http.Request, id int) {
 // @Failure 404 {object} map[string]string
 // @Failure 409 {object} map[string]string
 // @Router /penyanyi/{id} [delete]
-func deletePenyanyi(w http.ResponseWriter, r *http.Request, id int) {
+
+func deletePenyanyi(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	command, err := db.Exec(
 		r.Context(),
@@ -433,16 +837,24 @@ func deletePenyanyi(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err != nil {
+
 		errorResponse(
 			w,
 			409,
 			"Penyanyi tidak dapat dihapus karena masih digunakan oleh album",
 		)
+
 		return
 	}
 
 	if command.RowsAffected() == 0 {
-		errorResponse(w, 404, "Penyanyi tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Penyanyi tidak ditemukan",
+		)
+
 		return
 	}
 
@@ -456,55 +868,107 @@ func deletePenyanyi(w http.ResponseWriter, r *http.Request, id int) {
 }
 
 // ============================================================
-// ALBUM
+// ALBUM HANDLER
 // ============================================================
 
-func albumHandler(w http.ResponseWriter, r *http.Request) {
+func albumHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
-	id, hasID := getIDFromPath(r.URL.Path)
+	id, hasID := getIDFromPath(
+		r.URL.Path,
+	)
 
 	switch r.Method {
 
 	case http.MethodGet:
 
 		if hasID {
-			getAlbumByID(w, r, id)
+
+			getAlbumByID(
+				w,
+				r,
+				id,
+			)
+
 		} else {
-			getAlbum(w, r)
+
+			getAlbum(
+				w,
+				r,
+			)
 		}
 
 	case http.MethodPost:
 
 		if hasID {
-			errorResponse(w, 400, "POST tidak membutuhkan ID")
+
+			errorResponse(
+				w,
+				400,
+				"POST tidak membutuhkan ID",
+			)
+
 			return
 		}
 
-		createAlbum(w, r)
+		createAlbum(
+			w,
+			r,
+		)
 
 	case http.MethodPut:
 
 		if !hasID {
-			errorResponse(w, 400, "ID wajib diisi")
+
+			errorResponse(
+				w,
+				400,
+				"ID wajib diisi",
+			)
+
 			return
 		}
 
-		updateAlbum(w, r, id)
+		updateAlbum(
+			w,
+			r,
+			id,
+		)
 
 	case http.MethodDelete:
 
 		if !hasID {
-			errorResponse(w, 400, "ID wajib diisi")
+
+			errorResponse(
+				w,
+				400,
+				"ID wajib diisi",
+			)
+
 			return
 		}
 
-		deleteAlbum(w, r, id)
+		deleteAlbum(
+			w,
+			r,
+			id,
+		)
 
 	default:
 
-		errorResponse(w, 405, "Method tidak diperbolehkan")
+		errorResponse(
+			w,
+			405,
+			"Method tidak diperbolehkan",
+		)
 	}
 }
+
+// ============================================================
+// GET ALL ALBUM
+// ============================================================
 
 // getAlbum godoc
 // @Summary Mendapatkan semua album
@@ -513,7 +977,11 @@ func albumHandler(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {array} Album
 // @Failure 500 {object} map[string]string
 // @Router /album [get]
-func getAlbum(w http.ResponseWriter, r *http.Request) {
+
+func getAlbum(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
 	rows, err := db.Query(
 		r.Context(),
@@ -525,7 +993,13 @@ func getAlbum(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
@@ -544,15 +1018,31 @@ func getAlbum(w http.ResponseWriter, r *http.Request) {
 			&a.PenyanyiID,
 		); err != nil {
 
-			errorResponse(w, 500, err.Error())
+			errorResponse(
+				w,
+				500,
+				err.Error(),
+			)
+
 			return
 		}
 
-		data = append(data, a)
+		data = append(
+			data,
+			a,
+		)
 	}
 
-	jsonResponse(w, 200, data)
+	jsonResponse(
+		w,
+		200,
+		data,
+	)
 }
+
+// ============================================================
+// GET ALBUM BY ID
+// ============================================================
 
 // getAlbumByID godoc
 // @Summary Mendapatkan album berdasarkan ID
@@ -563,7 +1053,12 @@ func getAlbum(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /album/{id} [get]
-func getAlbumByID(w http.ResponseWriter, r *http.Request, id int) {
+
+func getAlbumByID(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	var a Album
 
@@ -583,17 +1078,37 @@ func getAlbumByID(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err == pgx.ErrNoRows {
-		errorResponse(w, 404, "Album tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Album tidak ditemukan",
+		)
+
 		return
 	}
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 200, a)
+	jsonResponse(
+		w,
+		200,
+		a,
+	)
 }
+
+// ============================================================
+// CREATE ALBUM
+// ============================================================
 
 // createAlbum godoc
 // @Summary Menambahkan album
@@ -605,12 +1120,24 @@ func getAlbumByID(w http.ResponseWriter, r *http.Request, id int) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /album [post]
-func createAlbum(w http.ResponseWriter, r *http.Request) {
+
+func createAlbum(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
 	var a Album
 
-	if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
-		errorResponse(w, 400, "Format JSON tidak valid")
+	if err := json.NewDecoder(
+		r.Body,
+	).Decode(&a); err != nil {
+
+		errorResponse(
+			w,
+			400,
+			"Format JSON tidak valid",
+		)
+
 		return
 	}
 
@@ -625,15 +1152,31 @@ func createAlbum(w http.ResponseWriter, r *http.Request) {
 		a.NamaAlbum,
 		a.Tahun,
 		a.PenyanyiID,
-	).Scan(&a.ID)
+	).Scan(
+		&a.ID,
+	)
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 201, a)
+	jsonResponse(
+		w,
+		201,
+		a,
+	)
 }
+
+// ============================================================
+// UPDATE ALBUM
+// ============================================================
 
 // updateAlbum godoc
 // @Summary Mengubah album
@@ -647,12 +1190,25 @@ func createAlbum(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /album/{id} [put]
-func updateAlbum(w http.ResponseWriter, r *http.Request, id int) {
+
+func updateAlbum(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	var a Album
 
-	if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
-		errorResponse(w, 400, "Format JSON tidak valid")
+	if err := json.NewDecoder(
+		r.Body,
+	).Decode(&a); err != nil {
+
+		errorResponse(
+			w,
+			400,
+			"Format JSON tidak valid",
+		)
+
 		return
 	}
 
@@ -678,17 +1234,37 @@ func updateAlbum(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err == pgx.ErrNoRows {
-		errorResponse(w, 404, "Album tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Album tidak ditemukan",
+		)
+
 		return
 	}
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 200, a)
+	jsonResponse(
+		w,
+		200,
+		a,
+	)
 }
+
+// ============================================================
+// DELETE ALBUM
+// ============================================================
 
 // deleteAlbum godoc
 // @Summary Menghapus album
@@ -699,7 +1275,12 @@ func updateAlbum(w http.ResponseWriter, r *http.Request, id int) {
 // @Failure 404 {object} map[string]string
 // @Failure 409 {object} map[string]string
 // @Router /album/{id} [delete]
-func deleteAlbum(w http.ResponseWriter, r *http.Request, id int) {
+
+func deleteAlbum(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	command, err := db.Exec(
 		r.Context(),
@@ -708,16 +1289,24 @@ func deleteAlbum(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err != nil {
+
 		errorResponse(
 			w,
 			409,
 			"Album tidak dapat dihapus karena masih digunakan oleh lagu",
 		)
+
 		return
 	}
 
 	if command.RowsAffected() == 0 {
-		errorResponse(w, 404, "Album tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Album tidak ditemukan",
+		)
+
 		return
 	}
 
@@ -731,55 +1320,107 @@ func deleteAlbum(w http.ResponseWriter, r *http.Request, id int) {
 }
 
 // ============================================================
-// LAGU
+// LAGU HANDLER
 // ============================================================
 
-func laguHandler(w http.ResponseWriter, r *http.Request) {
+func laguHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
-	id, hasID := getIDFromPath(r.URL.Path)
+	id, hasID := getIDFromPath(
+		r.URL.Path,
+	)
 
 	switch r.Method {
 
 	case http.MethodGet:
 
 		if hasID {
-			getLaguByID(w, r, id)
+
+			getLaguByID(
+				w,
+				r,
+				id,
+			)
+
 		} else {
-			getLagu(w, r)
+
+			getLagu(
+				w,
+				r,
+			)
 		}
 
 	case http.MethodPost:
 
 		if hasID {
-			errorResponse(w, 400, "POST tidak membutuhkan ID")
+
+			errorResponse(
+				w,
+				400,
+				"POST tidak membutuhkan ID",
+			)
+
 			return
 		}
 
-		createLagu(w, r)
+		createLagu(
+			w,
+			r,
+		)
 
 	case http.MethodPut:
 
 		if !hasID {
-			errorResponse(w, 400, "ID wajib diisi")
+
+			errorResponse(
+				w,
+				400,
+				"ID wajib diisi",
+			)
+
 			return
 		}
 
-		updateLagu(w, r, id)
+		updateLagu(
+			w,
+			r,
+			id,
+		)
 
 	case http.MethodDelete:
 
 		if !hasID {
-			errorResponse(w, 400, "ID wajib diisi")
+
+			errorResponse(
+				w,
+				400,
+				"ID wajib diisi",
+			)
+
 			return
 		}
 
-		deleteLagu(w, r, id)
+		deleteLagu(
+			w,
+			r,
+			id,
+		)
 
 	default:
 
-		errorResponse(w, 405, "Method tidak diperbolehkan")
+		errorResponse(
+			w,
+			405,
+			"Method tidak diperbolehkan",
+		)
 	}
 }
+
+// ============================================================
+// GET ALL LAGU
+// ============================================================
 
 // getLagu godoc
 // @Summary Mendapatkan semua lagu
@@ -788,7 +1429,11 @@ func laguHandler(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {array} Lagu
 // @Failure 500 {object} map[string]string
 // @Router /lagu [get]
-func getLagu(w http.ResponseWriter, r *http.Request) {
+
+func getLagu(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
 	rows, err := db.Query(
 		r.Context(),
@@ -800,7 +1445,13 @@ func getLagu(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
@@ -818,15 +1469,31 @@ func getLagu(w http.ResponseWriter, r *http.Request) {
 			&l.AlbumID,
 		); err != nil {
 
-			errorResponse(w, 500, err.Error())
+			errorResponse(
+				w,
+				500,
+				err.Error(),
+			)
+
 			return
 		}
 
-		data = append(data, l)
+		data = append(
+			data,
+			l,
+		)
 	}
 
-	jsonResponse(w, 200, data)
+	jsonResponse(
+		w,
+		200,
+		data,
+	)
 }
+
+// ============================================================
+// GET LAGU BY ID
+// ============================================================
 
 // getLaguByID godoc
 // @Summary Mendapatkan lagu berdasarkan ID
@@ -837,7 +1504,12 @@ func getLagu(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /lagu/{id} [get]
-func getLaguByID(w http.ResponseWriter, r *http.Request, id int) {
+
+func getLaguByID(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	var l Lagu
 
@@ -856,18 +1528,30 @@ func getLaguByID(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err == pgx.ErrNoRows {
-		errorResponse(w, 404, "Lagu tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Lagu tidak ditemukan",
+		)
+
 		return
 	}
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	// =========================
+	// ========================================================
 	// HATEOAS / RMM LEVEL 3
-	// =========================
+	// ========================================================
 
 	response := LaguResponse{
 		ID:      l.ID,
@@ -876,17 +1560,27 @@ func getLaguByID(w http.ResponseWriter, r *http.Request, id int) {
 
 		Links: LaguLinks{
 			Self: Link{
-				Href: "/lagu/" + strconv.Itoa(l.ID),
+				Href: "/lagu/" +
+					strconv.Itoa(l.ID),
 			},
 
 			Album: Link{
-				Href: "/album/" + strconv.Itoa(l.AlbumID),
+				Href: "/album/" +
+					strconv.Itoa(l.AlbumID),
 			},
 		},
 	}
 
-	jsonResponse(w, 200, response)
+	jsonResponse(
+		w,
+		200,
+		response,
+	)
 }
+
+// ============================================================
+// CREATE LAGU
+// ============================================================
 
 // createLagu godoc
 // @Summary Menambahkan lagu
@@ -898,12 +1592,24 @@ func getLaguByID(w http.ResponseWriter, r *http.Request, id int) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /lagu [post]
-func createLagu(w http.ResponseWriter, r *http.Request) {
+
+func createLagu(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 
 	var l Lagu
 
-	if err := json.NewDecoder(r.Body).Decode(&l); err != nil {
-		errorResponse(w, 400, "Format JSON tidak valid")
+	if err := json.NewDecoder(
+		r.Body,
+	).Decode(&l); err != nil {
+
+		errorResponse(
+			w,
+			400,
+			"Format JSON tidak valid",
+		)
+
 		return
 	}
 
@@ -917,15 +1623,31 @@ func createLagu(w http.ResponseWriter, r *http.Request) {
 		`,
 		l.Judul,
 		l.AlbumID,
-	).Scan(&l.ID)
+	).Scan(
+		&l.ID,
+	)
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 201, l)
+	jsonResponse(
+		w,
+		201,
+		l,
+	)
 }
+
+// ============================================================
+// UPDATE LAGU
+// ============================================================
 
 // updateLagu godoc
 // @Summary Mengubah lagu
@@ -939,12 +1661,25 @@ func createLagu(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /lagu/{id} [put]
-func updateLagu(w http.ResponseWriter, r *http.Request, id int) {
+
+func updateLagu(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	var l Lagu
 
-	if err := json.NewDecoder(r.Body).Decode(&l); err != nil {
-		errorResponse(w, 400, "Format JSON tidak valid")
+	if err := json.NewDecoder(
+		r.Body,
+	).Decode(&l); err != nil {
+
+		errorResponse(
+			w,
+			400,
+			"Format JSON tidak valid",
+		)
+
 		return
 	}
 
@@ -967,17 +1702,37 @@ func updateLagu(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err == pgx.ErrNoRows {
-		errorResponse(w, 404, "Lagu tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Lagu tidak ditemukan",
+		)
+
 		return
 	}
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
-	jsonResponse(w, 200, l)
+	jsonResponse(
+		w,
+		200,
+		l,
+	)
 }
+
+// ============================================================
+// DELETE LAGU
+// ============================================================
 
 // deleteLagu godoc
 // @Summary Menghapus lagu
@@ -987,7 +1742,12 @@ func updateLagu(w http.ResponseWriter, r *http.Request, id int) {
 // @Success 200 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Router /lagu/{id} [delete]
-func deleteLagu(w http.ResponseWriter, r *http.Request, id int) {
+
+func deleteLagu(
+	w http.ResponseWriter,
+	r *http.Request,
+	id int,
+) {
 
 	command, err := db.Exec(
 		r.Context(),
@@ -996,12 +1756,24 @@ func deleteLagu(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err != nil {
-		errorResponse(w, 500, err.Error())
+
+		errorResponse(
+			w,
+			500,
+			err.Error(),
+		)
+
 		return
 	}
 
 	if command.RowsAffected() == 0 {
-		errorResponse(w, 404, "Lagu tidak ditemukan")
+
+		errorResponse(
+			w,
+			404,
+			"Lagu tidak ditemukan",
+		)
+
 		return
 	}
 
@@ -1018,10 +1790,15 @@ func deleteLagu(w http.ResponseWriter, r *http.Request, id int) {
 // HELPER
 // ============================================================
 
-func getIDFromPath(path string) (int, bool) {
+func getIDFromPath(
+	path string,
+) (int, bool) {
 
 	parts := strings.Split(
-		strings.Trim(path, "/"),
+		strings.Trim(
+			path,
+			"/",
+		),
 		"/",
 	)
 
@@ -1029,7 +1806,9 @@ func getIDFromPath(path string) (int, bool) {
 		return 0, false
 	}
 
-	id, err := strconv.Atoi(parts[len(parts)-1])
+	id, err := strconv.Atoi(
+		parts[len(parts)-1],
+	)
 
 	if err != nil {
 		return 0, false
